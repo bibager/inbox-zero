@@ -1,0 +1,79 @@
+name: "TrackIQ: merge upstream and build image"
+run-name: "TrackIQ deploy image"
+
+# Keeps the trackiq/deploy branch = upstream main + our open PR branches, and
+# publishes an amd64 image the droplet pulls nightly. Fails loudly on a merge
+# conflict instead of shipping a broken tree.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: trackiq-deploy-image
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/bibager/inbox-zero
+
+jobs:
+  build:
+    if: github.repository == 'bibager/inbox-zero'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout deploy branch
+        uses: actions/checkout@v4
+        with:
+          ref: trackiq/deploy
+          fetch-depth: 0
+
+      - name: Merge upstream main
+        id: merge
+        run: |
+          git config user.name "trackiq-deploy-bot"
+          git config user.email "trackiq-deploy-bot@users.noreply.github.com"
+          git remote add upstream https://github.com/elie222/inbox-zero.git
+          git fetch upstream main
+          BEFORE=$(git rev-parse HEAD)
+          if ! git merge --no-edit upstream/main; then
+            echo "::error::Merge conflict with upstream/main - resolve on trackiq/deploy manually"
+            git status --short
+            exit 1
+          fi
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" != "$AFTER" ]; then
+            git push origin HEAD:trackiq/deploy
+          fi
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.prod
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:trackiq-latest
+            ${{ env.IMAGE }}:trackiq-${{ steps.merge.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "Built ${{ env.IMAGE }}:trackiq-${{ steps.merge.outputs.sha }} (also :trackiq-latest)" >> "$GITHUB_STEP_SUMMARY"
