@@ -47,7 +47,10 @@ jobs:
           fi
           AFTER=$(git rev-parse HEAD)
           if [ "$BEFORE" != "$AFTER" ]; then
-            git push origin HEAD:trackiq/deploy
+            # GITHUB_TOKEN may not push commits that touch .github/workflows
+            # (upstream changes its CI now and then). Build from the merged
+            # tree anyway; the branch catches up on the next local sync.
+            git push origin HEAD:trackiq/deploy               || echo "::warning::Could not push merged trackiq/deploy (workflow files changed upstream?) - building from the merged tree anyway"
           fi
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
