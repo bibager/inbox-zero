@@ -223,6 +223,52 @@ describe("queryBatchMessages", () => {
     expect(api).not.toHaveBeenCalled();
   });
 
+  it("queries the requested folder directly for folder-only cleanup", async () => {
+    const request = createMockMessagesRequest();
+    const api = vi.fn().mockReturnValue(request);
+    await queryBatchMessages(
+      createCachedOutlookClient(api),
+      { folderId: "folder/id", searchQuery: "" },
+      createTestLogger(),
+    );
+    expect(api).toHaveBeenCalledWith("/me/mailFolders/folder%2Fid/messages");
+    expect(request.search).not.toHaveBeenCalled();
+    expect(request.filter).not.toHaveBeenCalled();
+  });
+
+  it("preserves folder scope on continuation pages", async () => {
+    const request = createMockMessagesRequest();
+    request.get.mockResolvedValue({
+      value: [
+        {
+          id: "inside",
+          conversationId: "thread-1",
+          parentFolderId: "folder-1",
+        },
+        {
+          id: "outside",
+          conversationId: "thread-2",
+          parentFolderId: "folder-2",
+        },
+      ],
+      "@odata.nextLink":
+        "https://graph.microsoft.com/v1.0/me/messages?$skip=40",
+    });
+    const api = vi.fn().mockReturnValue(request);
+    const result = await queryBatchMessages(
+      createCachedOutlookClient(api),
+      {
+        folderId: "folder-1",
+        pageToken: "https://graph.microsoft.com/v1.0/me/messages?$skip=20",
+      },
+      createTestLogger(),
+    );
+    expect(result.messages.map((message) => message.id)).toEqual(["inside"]);
+    expect(result.nextPageToken).toBe(
+      "https://graph.microsoft.com/v1.0/me/messages?$skip=40",
+    );
+  });
+
   it("uses metadata filters for unread category searches", async () => {
     const request = createMockMessagesRequest();
     const api = vi.fn().mockReturnValue(request);
@@ -318,6 +364,70 @@ describe("queryBatchMessages", () => {
 
     expect(request.search).toHaveBeenCalledWith('"newsletter"');
     expect(request.filter).not.toHaveBeenCalled();
+  });
+
+  it("escapes exact sender filters and omits incompatible ordering", async () => {
+    const request = createMockMessagesRequest();
+    const api = vi.fn().mockReturnValue(request);
+    const client = createCachedOutlookClient(api);
+
+    await queryBatchMessages(
+      client,
+      {
+        fromEmail: "o'connor@example.com",
+        maxResults: 20,
+      },
+      createTestLogger(),
+    );
+
+    expect(request.filter).toHaveBeenCalledWith(
+      "from/emailAddress/address eq 'o''connor@example.com'",
+    );
+    expect(request.orderby).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    undefined,
+    "https://graph.microsoft.com/v1.0/me/messages?$skiptoken=next-page",
+  ])("filters Outlook search pages to the exact sender (page: %s)", async (pageToken) => {
+    const request = createMockMessagesRequest();
+    request.get.mockResolvedValue({
+      value: [
+        {
+          id: "matching-message",
+          conversationId: "matching-thread",
+          from: { emailAddress: { address: "Sender@Example.com" } },
+        },
+        {
+          id: "non-matching-message",
+          conversationId: "non-matching-thread",
+          from: { emailAddress: { address: "other@example.com" } },
+        },
+      ],
+    });
+    const api = vi.fn().mockReturnValue(request);
+    const client = createCachedOutlookClient(api);
+
+    const result = await queryBatchMessages(
+      client,
+      {
+        searchQuery: "invoice",
+        pageToken,
+        fromEmail: "sender@example.com",
+        maxResults: 20,
+      },
+      createTestLogger(),
+    );
+
+    if (pageToken) {
+      expect(api).toHaveBeenCalledWith(pageToken);
+      expect(request.search).not.toHaveBeenCalled();
+    } else {
+      expect(request.search).toHaveBeenCalledWith('"invoice"');
+    }
+    expect(result.messages.map((message) => message.id)).toEqual([
+      "matching-message",
+    ]);
   });
 });
 

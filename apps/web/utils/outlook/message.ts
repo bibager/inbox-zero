@@ -456,6 +456,13 @@ function matchesOutlookMetadataFilters(
   return true;
 }
 
+function matchesOutlookSender(message: Message, normalizedFromEmail: string) {
+  return (
+    message.from?.emailAddress?.address?.trim().toLowerCase() ===
+    normalizedFromEmail
+  );
+}
+
 function createOutlookMetadataODataFilters(filters: OutlookMetadataFilters) {
   const odataFilters: string[] = [];
 
@@ -480,12 +487,14 @@ export async function queryBatchMessages(
     maxResults?: number;
     pageToken?: string;
     folderId?: string;
+    fromEmail?: string;
     readState?: "read" | "unread";
     categoryNames?: string[];
   },
   logger: Logger,
 ) {
   const { searchQuery, dateFilters, pageToken, folderId } = options;
+  const normalizedFromEmail = options.fromEmail?.trim().toLowerCase();
 
   const MAX_RESULTS = 20;
 
@@ -522,6 +531,12 @@ export async function queryBatchMessages(
 
     const filteredMessages = response.value.filter((message) => {
       if (folderId && message.parentFolderId !== folderId) return false;
+      if (
+        normalizedFromEmail &&
+        !matchesOutlookSender(message, normalizedFromEmail)
+      ) {
+        return false;
+      }
       return matchesOutlookMetadataFilters(message, metadataSearch.filters);
     });
     const messages = await convertMessages(
@@ -551,7 +566,7 @@ export async function queryBatchMessages(
   });
 
   // Build the base request
-  let request = createMessagesRequest(client).top(maxResults);
+  let request = createMessagesRequest(client, folderId).top(maxResults);
 
   let nextPageToken: string | undefined;
 
@@ -582,6 +597,12 @@ export async function queryBatchMessages(
 
     const filteredMessages = response.value.filter((message) => {
       if (folderId && message.parentFolderId !== folderId) return false;
+      if (
+        normalizedFromEmail &&
+        !matchesOutlookSender(message, normalizedFromEmail)
+      ) {
+        return false;
+      }
       return matchesOutlookMetadataFilters(message, metadataSearch.filters);
     });
     const messages = await convertMessages(
@@ -604,13 +625,14 @@ export async function queryBatchMessages(
     // Filter path - use $filter parameter for date filters or folder-only queries
     const filters: string[] = [];
 
-    // Add folder filter if a specific folder is requested
-    if (folderFilter) {
-      filters.push(folderFilter);
-    }
-
     if (metadataSearch.odataFilters.length) {
       filters.push(...metadataSearch.odataFilters);
+    }
+
+    if (options.fromEmail) {
+      filters.push(
+        `from/emailAddress/address eq '${escapeODataString(options.fromEmail)}'`,
+      );
     }
 
     // Add date filters if provided
@@ -625,7 +647,7 @@ export async function queryBatchMessages(
       folderFilter,
       metadataFilters: metadataSearch.odataFilters,
       dateFilters: dateFilters || [],
-      combinedFilter,
+      hasSenderFilter: !!normalizedFromEmail,
     });
 
     // Only apply filter if we have something to filter
@@ -633,7 +655,9 @@ export async function queryBatchMessages(
       request = request.filter(combinedFilter);
     }
 
-    if (!metadataSearch.odataFilters.length) {
+    // Graph rejects $orderby combined with $filter on sender or metadata
+    // properties (InefficientFilter), so only sort when those are absent
+    if (!metadataSearch.odataFilters.length && !options.fromEmail) {
       request = request.orderby("receivedDateTime DESC");
     }
 
@@ -650,7 +674,7 @@ export async function queryBatchMessages(
     logger.info("Filter results", {
       messageCount: messages.length,
       hasNextPageToken: !!nextPageToken,
-      combinedFilter,
+      hasSenderFilter: !!normalizedFromEmail,
     });
 
     return { messages, nextPageToken };
@@ -920,10 +944,17 @@ export async function getMessages(
  * Helper to create a request for fetching multiple messages with standard fields selected.
  * Returns a typed request builder that can be chained with .filter(), .top(), etc.
  */
-export function createMessagesRequest(client: OutlookClient) {
+export function createMessagesRequest(
+  client: OutlookClient,
+  folderId?: string,
+) {
   return client
     .getClient()
-    .api("/me/messages")
+    .api(
+      folderId
+        ? `/me/mailFolders/${encodeURIComponent(folderId)}/messages`
+        : "/me/messages",
+    )
     .select(MESSAGE_SELECT_FIELDS)
     .expand(MESSAGE_EXPAND_ATTACHMENTS);
 }

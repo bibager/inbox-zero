@@ -1,4 +1,5 @@
 {
+  "archive-reconciliation.spec.ts": ["app/(app)/MailMutationOutboxManager.tsx"],
   "account-selection.spec.ts": [
     "app/(app)/[emailAccountId]/mail/MailSidebar.tsx",
     "app/(app)/[emailAccountId]/mail/use-combined-mail-threads.ts"
@@ -34,6 +35,7 @@
     "app/(app)/[emailAccountId]/mail/MailLabelChip.tsx",
     "app/(app)/[emailAccountId]/mail/ThreadActionsMenu.tsx"
   ],
+  "message-overflow.spec.ts": ["components/email-list/EmailContents.tsx"],
   "navigation-and-views.spec.ts": [
     "app/(app)/[emailAccountId]/mail/MailSidebar.tsx",
     "app/(app)/[emailAccountId]/mail/MailboxItemContextMenu.tsx",
