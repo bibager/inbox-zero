@@ -4,6 +4,12 @@ import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const allocatedPorts = new Set();
+const production = process.env.PLAYWRIGHT_PRODUCTION === "1";
+if (production && !process.env.NEXT_PUBLIC_BASE_URL) {
+  throw new Error(
+    "Production Playwright requires NEXT_PUBLIC_BASE_URL to match the URL used for next build.",
+  );
+}
 const baseURL =
   process.env.NEXT_PUBLIC_BASE_URL ??
   `http://localhost:${await getAvailablePort()}`;
@@ -57,9 +63,7 @@ process.env.PLAYWRIGHT_AUTH_FILE = authStatePath;
 process.env.PLAYWRIGHT_RUN_ID = runId;
 process.env.PLAYWRIGHT_TEST_EMAIL = playwrightTestEmail;
 if (todoistBaseUrl) {
-  process.env.MCP_SERVER_URL_OVERRIDES = JSON.stringify({
-    todoist: `${todoistBaseUrl}/mcp`,
-  });
+  process.env.PLAYWRIGHT_TODOIST_BASE_URL = todoistBaseUrl;
 }
 
 export default defineConfig({
@@ -109,12 +113,16 @@ export default defineConfig({
   ],
   webServer: [
     {
+      name: "Email emulator",
+      stdout: "pipe",
       command: `node __tests__/playwright/email-server.mjs ${emailPort}`,
       cwd: process.cwd(),
       url: emailBaseUrl,
       timeout: 30_000,
     },
     {
+      name: "Google emulator",
+      stdout: "pipe",
       command: emulateCommand,
       cwd: process.cwd(),
       url: `${emulateBaseUrl}/.well-known/openid-configuration`,
@@ -124,6 +132,8 @@ export default defineConfig({
     ...(todoistBaseUrl && todoistPort
       ? [
           {
+            name: "Todoist emulator",
+            stdout: "pipe",
             command: `pnpm exec tsx scripts/todoist-mcp-emulator.ts ${todoistPort}`,
             cwd: process.cwd(),
             url: `${todoistBaseUrl}/health`,
@@ -133,14 +143,21 @@ export default defineConfig({
         ]
       : []),
     {
-      command: `pnpm exec next dev --turbopack --port ${basePort}`,
+      name: "Next.js",
+      stdout: "pipe",
+      command: `${
+        todoistEnabled
+          ? "pnpm exec node --import tsx --import ./__tests__/playwright/todoist-transport.ts node_modules/next/dist/bin/next"
+          : "pnpm exec next"
+      } ${production ? "start" : "dev --turbopack"} --port ${basePort}`,
       cwd: process.cwd(),
       url: `${baseURL}/api/auth/ok`,
       timeout: 240_000,
       reuseExistingServer: !process.env.CI,
       env: {
         ...process.env,
-        NODE_ENV: "development",
+        MCP_SERVER_URL_OVERRIDES: "",
+        NODE_ENV: production ? "production" : "development",
         NODE_OPTIONS: nodeOptions,
         NEXT_PUBLIC_BASE_URL: baseURL,
         DATABASE_URL: databaseUrl,
@@ -183,7 +200,8 @@ export default defineConfig({
         NEXT_PUBLIC_POSTHOG_API_HOST: "",
         NEXT_PUBLIC_DUB_REFER_DOMAIN: "",
         NEXT_PUBLIC_IS_RESEND_CONFIGURED: "",
-        NEXT_PUBLIC_CONTACTS_ENABLED: "false",
+        NEXT_PUBLIC_CONTACTS_ENABLED:
+          process.env.NEXT_PUBLIC_CONTACTS_ENABLED ?? "true",
         NEXT_PUBLIC_EMAIL_SEND_ENABLED: "true",
         NEXT_PUBLIC_MEETING_RECORDER_ENABLED: "true",
         PLAYWRIGHT_TEST_EMAIL: playwrightTestEmail,

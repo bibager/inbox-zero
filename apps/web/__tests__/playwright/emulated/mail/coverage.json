@@ -13,6 +13,9 @@
     "store/command-palette.ts",
     "app/(app)/[emailAccountId]/mail/snooze-command-palette.ts"
   ],
+  "contact-autocomplete.spec.ts": [
+    "app/(app)/[emailAccountId]/compose/ComposeEmailForm.tsx"
+  ],
   "compose-and-reply.spec.ts": [
     "app/(app)/[emailAccountId]/compose/ComposeEmailForm.tsx",
     "components/email-list/EmailThread.tsx"
@@ -87,5 +90,15 @@
     "app/(app)/[emailAccountId]/mail/ListToolbar.tsx",
     "app/(app)/[emailAccountId]/mail/use-thread-actions.ts",
     "app/(app)/[emailAccountId]/mail/use-thread-selection.ts"
+  ],
+  "reader-transition.spec.ts": [
+    "app/(app)/[emailAccountId]/mail/BufferedThreadReader.tsx",
+    "components/email-list/BufferedEmailIframe.tsx"
+  ],
+  "message-actions.spec.ts": [
+    "app/(app)/[emailAccountId]/mail/MessageActionsMenu.tsx",
+    "app/(app)/[emailAccountId]/mail/ThreadActionsMenu.tsx",
+    "components/email-list/EmailMessage.tsx",
+    "utils/threads/load.ts"
   ]
 }
