@@ -152,6 +152,7 @@ model EmailAccount {
   rulesPrompt               String? // @deprecated
   autoCategorizeSenders     Boolean              @default(false)
   multiRuleSelectionEnabled Boolean              @default(false)
+  autoUnsubscribeLabelIds   String[]             @default([]) // labels that unsubscribe the sender when applied
   sensitiveDataPolicy       String?
   draftReplyConfidence      DraftReplyConfidence @default(ALL_EMAILS)
   draftCleanupDays          Int?                 @default(14)

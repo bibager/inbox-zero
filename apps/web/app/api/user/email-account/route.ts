@@ -28,6 +28,7 @@ async function getEmailAccount({
       userId: true,
       about: true,
       multiRuleSelectionEnabled: true,
+      autoUnsubscribeLabelIds: true,
       sensitiveDataPolicy: true,
       draftReplyConfidence: true,
       allowHiddenAiDraftLinks: true,
