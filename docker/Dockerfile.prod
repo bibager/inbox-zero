@@ -125,7 +125,14 @@ RUN set -eux; \
         cp "$src/meriyah.mjs" "$src/meriyah.min.mjs" "$d/"; \
         found=$((found + 1)); \
     done; \
-    test "$found" -gt 0
+    # Tracing may leave meriyah out entirely; ship the package so the ESM
+    # import still resolves if @sentry/nextjs asks for it at runtime.
+    if [ "$found" -eq 0 ]; then \
+        dest=/app/apps/web/.next/standalone/node_modules/meriyah; \
+        mkdir -p "$dest"; \
+        cp -rL "$(dirname "$src")/." "$dest/"; \
+        echo 'meriyah not in trace; copied package into standalone'; \
+    fi
 
 RUN rm -f /app/apps/web/.env /app/apps/web/.next/standalone/apps/web/.env
 
