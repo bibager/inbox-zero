@@ -84,6 +84,10 @@ vi.mock("@/utils/rule/learn-from-label", () => ({
   learnSenderFromLabel: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/utils/senders/unsubscribe-for-labels", () => ({
+  unsubscribeForLabels: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe("process-label-added-event", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -29,6 +29,7 @@ async function getEmailAccount({
       about: true,
       multiRuleSelectionEnabled: true,
       learnFromLabels: true,
+      autoUnsubscribeLabelIds: true,
       sensitiveDataPolicy: true,
       draftReplyConfidence: true,
       allowHiddenAiDraftLinks: true,

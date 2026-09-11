@@ -22,6 +22,7 @@ import {
   isLearnFromLabelsEnabled,
   learnSenderFromLabel,
 } from "@/utils/rule/learn-from-label";
+import { unsubscribeForLabels } from "@/utils/senders/unsubscribe-for-labels";
 import { isSameEmailAddress, isSameOrganization } from "@/utils/email";
 import { internalDateToDate } from "@/utils/date";
 import { hasPriorContactOrAssumeYes } from "@/utils/cold-email/has-prior-contact";
@@ -93,6 +94,15 @@ export async function handleLabelAddedEvent(
       spamLearnedThreadIds.add(threadId);
     }
   }
+
+  await unsubscribeForLabels({
+    emailAccountId,
+    labelIds: classifiableLabelIds,
+    sender,
+    messageId,
+    provider,
+    logger,
+  });
 
   await Promise.all(
     classifiableLabelIds.map((labelId) =>

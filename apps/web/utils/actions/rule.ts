@@ -11,6 +11,7 @@ import {
   enableDraftRepliesBody,
   enableMultiRuleSelectionBody,
   enableLearnFromLabelsBody,
+  setAutoUnsubscribeLabelsBody,
   updateDraftReplyConfidenceBody,
   deleteRuleBody,
   createRulesOnboardingBody,
@@ -295,6 +296,15 @@ export const enableLearnFromLabelsAction = actionClient
       });
     },
   );
+export const setAutoUnsubscribeLabelsAction = actionClient
+  .metadata({ name: "setAutoUnsubscribeLabels" })
+  .inputSchema(setAutoUnsubscribeLabelsBody)
+  .action(async ({ ctx: { emailAccountId }, parsedInput: { labelIds } }) => {
+    await prisma.emailAccount.update({
+      where: { id: emailAccountId },
+      data: { autoUnsubscribeLabelIds: labelIds },
+    });
+  });
 
 export const updateDraftReplyConfidenceAction = actionClient
   .metadata({ name: "updateDraftReplyConfidence" })

@@ -10,6 +10,7 @@ import { ReferralSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant
 import { LearnedPatternsSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/LearnedPatternsSetting";
 import { LabelCleanupSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/LabelCleanupSetting";
 import { LearnFromLabelsSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/LearnFromLabelsSetting";
+import { AutoUnsubscribeLabelsSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/AutoUnsubscribeLabelsSetting";
 import { PersonalSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/PersonalSignatureSetting";
 import { SentWithSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/SentWithSignatureSetting";
 import { MultiRuleSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/MultiRuleSetting";
@@ -47,6 +48,7 @@ export function SettingsTab() {
       <div className="space-y-2">
         <SectionHeader>Housekeeping</SectionHeader>
         <LabelCleanupSetting />
+        <AutoUnsubscribeLabelsSetting />
       </div>
 
       {!autoDraftDisabled && (
