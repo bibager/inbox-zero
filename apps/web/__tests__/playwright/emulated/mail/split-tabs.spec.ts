@@ -50,6 +50,28 @@ async function hideDevIndicator(page: Parameters<typeof openMail>[0]) {
   });
 }
 
+test("restores a deleted All tab and protects it from removal", async ({
+  page,
+}, testInfo) => {
+  const emailAccountId = await getEmailAccountId(page);
+  await withClient((client) =>
+    client.query(
+      'DELETE FROM "MailSplit" WHERE "emailAccountId" = $1 AND name = $2',
+      [emailAccountId, "All"],
+    ),
+  );
+  await openMail(page);
+  const allTab = page
+    .locator("button[data-split-tab]")
+    .filter({ hasText: /^All$/ });
+  await expect(allTab).toBeVisible();
+  await allTab.click({ button: "right" });
+  await expect(
+    page.getByRole("menuitem", { name: "Turn off split" }),
+  ).toBeHidden();
+  await capturePlaywrightCheckpoint(page, testInfo, "mail-protected-all-split");
+});
+
 test("moves focus with the active split when cycling by keyboard", async ({
   page,
 }, testInfo) => {
@@ -163,4 +185,78 @@ test("turns a prepared split on from the library", async ({
   await starredSplit.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Turn off split" }).click();
   await expect(starredSplit).toHaveCount(0);
+});
+
+test("Other excludes enabled splits and restores mail when a split is disabled", async ({
+  page,
+}, testInfo) => {
+  const { conversations } = await openMail(page);
+  // Remove Unread so category membership alone determines this partition.
+  await page
+    .getByRole("button", { name: "Unread", exact: true })
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Turn off split" }).click();
+  await page.getByRole("button", { name: "Other", exact: true }).click();
+  const promotion = conversationWithSubject(
+    page,
+    conversations,
+    "Promotion Category Message",
+  );
+  await expect(promotion).toBeVisible();
+
+  await page.getByRole("button", { name: "New split" }).click();
+  await page.getByRole("button", { name: "General", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Turn on the Important split", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Turn off the Important split",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(
+    page.getByRole("button", { name: "Important", exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "New split" }).click();
+  await page.getByRole("button", { name: "Build your own" }).click();
+  await page.getByLabel("Condition field").first().selectOption("CATEGORY");
+  await page
+    .getByLabel("Condition value")
+    .first()
+    .selectOption({ label: "Promotions" });
+  await page.getByLabel("Split name").fill("Promos");
+  await page.getByRole("button", { name: "Add split" }).click();
+  await expect(promotion).toBeVisible();
+  await page.getByRole("button", { name: "Other", exact: true }).click();
+  await expect(promotion).toHaveCount(0);
+  await capturePlaywrightCheckpoint(
+    page,
+    testInfo,
+    "mail-other-excludes-enabled-splits",
+  );
+
+  await page
+    .getByRole("button", { name: "Promos", exact: true })
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Turn off split" }).click();
+  await page.getByRole("button", { name: "Other", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Other", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await expect(promotion).toBeVisible();
+
+  await page.getByRole("button", { name: "New split" }).click();
+  await page.getByRole("button", { name: "Build your own" }).click();
+  await page.getByLabel("Condition field").first().selectOption("STARRED");
+  await page.getByLabel("Split name").fill("Other");
+  await page.getByRole("button", { name: "Add split" }).click();
+  await expect(
+    page.getByRole("button", { name: "Other (custom)", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Other", exact: true }),
+  ).toBeVisible();
 });
