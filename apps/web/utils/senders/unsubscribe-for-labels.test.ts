@@ -12,6 +12,8 @@ vi.mock("@/utils/prisma", () => ({
   default: {
     emailAccount: { findUnique: vi.fn() },
     newsletter: { findUnique: vi.fn().mockResolvedValue(null) },
+    groupItem: { findFirst: vi.fn().mockResolvedValue(null) },
+    executedAction: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }));
 
@@ -39,6 +41,8 @@ describe("unsubscribeForLabels", () => {
       autoUnsubscribeLabelIds: ["Label_blackhole"],
     } as any);
     vi.mocked(prisma.newsletter.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.groupItem.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.executedAction.findFirst).mockResolvedValue(null);
     getMessage.mockResolvedValue({
       headers: { "list-unsubscribe": "<https://example.com/u>" },
     });
@@ -54,6 +58,30 @@ describe("unsubscribeForLabels", () => {
         listUnsubscribeHeader: "<https://example.com/u>",
       }),
     );
+  });
+
+  it("unsubscribes when a rule filed a trained sender", async () => {
+    vi.mocked(prisma.groupItem.findFirst).mockResolvedValue({
+      id: "pattern",
+    } as any);
+    vi.mocked(prisma.executedAction.findFirst).mockResolvedValue({
+      id: "executed",
+    } as any);
+
+    await unsubscribeForLabels(args);
+
+    expect(unsubscribeSenderAndMark).toHaveBeenCalled();
+  });
+
+  it("does not unsubscribe when the AI chose the label for an untrained sender", async () => {
+    vi.mocked(prisma.executedAction.findFirst).mockResolvedValue({
+      id: "executed",
+    } as any);
+
+    await unsubscribeForLabels(args);
+
+    expect(getMessage).not.toHaveBeenCalled();
+    expect(unsubscribeSenderAndMark).not.toHaveBeenCalled();
   });
 
   it("ignores labels that are not configured", async () => {
