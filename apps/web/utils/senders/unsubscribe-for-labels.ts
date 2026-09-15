@@ -1,13 +1,19 @@
-import { NewsletterStatus } from "@/generated/prisma/enums";
+import {
+  ActionType,
+  GroupItemType,
+  NewsletterStatus,
+} from "@/generated/prisma/enums";
 import type { EmailProvider } from "@/utils/email/types";
 import type { Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import { unsubscribeSenderAndMark } from "@/utils/senders/unsubscribe";
 
 /**
- * When mail lands under one of the account's auto-unsubscribe labels (filed
- * by a rule or moved by the user), unsubscribe the sender via its
- * List-Unsubscribe header. Senders already unsubscribed are left alone.
+ * When mail lands under one of the account's auto-unsubscribe labels,
+ * unsubscribe the sender via its List-Unsubscribe header - but only when the
+ * user put it there: moved by hand, or filed by a rule because the sender is
+ * trained into it. A label the AI chose on its own never unsubscribes anyone.
+ * Senders already unsubscribed are left alone.
  */
 export async function unsubscribeForLabels({
   emailAccountId,
@@ -38,6 +44,38 @@ export async function unsubscribeForLabels({
     select: { status: true },
   });
   if (existing?.status === NewsletterStatus.UNSUBSCRIBED) return;
+
+  const hit = labelIds.filter((id) => watched.includes(id));
+  const trained = await prisma.groupItem.findFirst({
+    where: {
+      type: GroupItemType.FROM,
+      value: sender,
+      exclude: false,
+      group: {
+        emailAccountId,
+        rule: {
+          actions: { some: { type: ActionType.LABEL, labelId: { in: hit } } },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  if (!trained) {
+    const appliedByRule = await prisma.executedAction.findFirst({
+      where: {
+        type: ActionType.LABEL,
+        labelId: { in: hit },
+        executedRule: { messageId, emailAccountId },
+      },
+      select: { id: true },
+    });
+    if (appliedByRule) {
+      logger.info(
+        "Label chosen by a rule for an untrained sender, not unsubscribing",
+      );
+      return;
+    }
+  }
 
   const message = await provider.getMessage(messageId).catch((error) => {
     logger.warn("Could not read message for auto-unsubscribe", {
