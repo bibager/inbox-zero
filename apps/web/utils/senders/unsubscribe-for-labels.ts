@@ -37,7 +37,8 @@ export async function unsubscribeForLabels({
     select: { autoUnsubscribeLabelIds: true },
   });
   const watched = account?.autoUnsubscribeLabelIds ?? [];
-  if (!labelIds.some((id) => watched.includes(id))) return;
+  const hit = labelIds.filter((id) => watched.includes(id));
+  if (!hit.length) return;
 
   const existing = await prisma.newsletter.findUnique({
     where: { email_emailAccountId: { email: sender, emailAccountId } },
@@ -45,7 +46,6 @@ export async function unsubscribeForLabels({
   });
   if (existing?.status === NewsletterStatus.UNSUBSCRIBED) return;
 
-  const hit = labelIds.filter((id) => watched.includes(id));
   const trained = await prisma.groupItem.findFirst({
     where: {
       type: GroupItemType.FROM,
